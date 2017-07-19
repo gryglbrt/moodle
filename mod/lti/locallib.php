@@ -872,13 +872,29 @@ function lti_tool_configuration_from_content_item($typeid, $messagetype, $ltiver
         if (empty($config->name)) {
             $config->name = $tool->name;
         }
-        if (isset($item->text)) {
-            $config->introeditor = [
-                'text' => $item->text,
-                'format' => FORMAT_PLAIN
-            ];
-        }
-        if (isset($item->icon->{'@id'})) {
+        // handle plain text or text with thumbnail
+		if (isset($item->text)) {
+		    $text = $item->text;
+		    if (substr($text, 0, 1) !== '<') {
+		        $text = "<p>{$text}</p>";
+		    }
+		    if (isset($item->thumbnail)) {
+		        $thumbnail = '<img src="' . $item->thumbnail->{'@id'} . '"';
+		        if (isset($item->thumbnail->width)) {
+		            $thumbnail .= ' width="' . $item->thumbnail->width . 'px"';
+		        }
+		        if (isset($item->thumbnail->height)) {
+		            $thumbnail .= ' height="' . $item->thumbnail->height . 'px"';
+		        }
+		        $thumbnail .= ' style="display: inline; float: left; border: 0; padding-right: 10px;" />';
+		        $text = "<div>{$thumbnail}{$text}</div><div style=\"clear: left\"></div>";
+		    }
+		    $config->introeditor = [
+		        'text' => $text,
+		        'format' => FORMAT_HTML
+		    ];
+		}        
+		if (isset($item->icon->{'@id'})) {
             $iconurl = new moodle_url($item->icon->{'@id'});
             // Assign item's icon URL to secureicon or icon depending on its scheme.
             if (strtolower($iconurl->get_scheme()) === 'https') {
