@@ -55,6 +55,10 @@ define('FIRSTUSEDEXCELROW', 3);
 define('MOD_CLASS_ACTIVITY', 0);
 define('MOD_CLASS_RESOURCE', 1);
 
+define('COURSE_TIMELINE_PAST', 'past');
+define('COURSE_TIMELINE_INPROGRESS', 'inprogress');
+define('COURSE_TIMELINE_FUTURE', 'future');
+
 function make_log_url($module, $url) {
     switch ($module) {
         case 'course':
@@ -863,6 +867,7 @@ function course_create_section($courseorid, $position = 0, $skipcheck = false) {
     $cw->name = null;
     $cw->visible = 1;
     $cw->availability = null;
+    $cw->timemodified = time();
     $cw->id = $DB->insert_record("course_sections", $cw);
 
     // Now move it to the specified position.
@@ -1105,10 +1110,7 @@ function set_coursemodule_name($id, $name) {
     grade_update_mod_grades($grademodule);
 
     // Update calendar events with the new name.
-    $refresheventsfunction = $cm->modname . '_refresh_events';
-    if (function_exists($refresheventsfunction)) {
-        call_user_func($refresheventsfunction, $cm->course);
-    }
+    course_module_update_calendar_events($cm->modname, $grademodule, $cm);
 
     return true;
 }
@@ -1200,8 +1202,10 @@ function course_delete_module($cmid, $async = false) {
 
     // Delete events from calendar.
     if ($events = $DB->get_records('event', array('instance' => $cm->instance, 'modulename' => $modulename))) {
+        $coursecontext = context_course::instance($cm->course);
         foreach($events as $event) {
-            $calendarevent = calendar_event::load($event->id);
+            $event->context = $coursecontext;
+            $calendarevent = calendar_event::load($event);
             $calendarevent->delete();
         }
     }
@@ -1377,6 +1381,80 @@ function delete_mod_from_section($modid, $sectionid) {
 
     }
     return false;
+}
+
+/**
+ * This function updates the calendar events from the information stored in the module table and the course
+ * module table.
+ *
+ * @param  string $modulename Module name
+ * @param  stdClass $instance Module object. Either the $instance or the $cm must be supplied.
+ * @param  stdClass $cm Course module object. Either the $instance or the $cm must be supplied.
+ * @return bool Returns true if calendar events are updated.
+ * @since  Moodle 3.3.4
+ */
+function course_module_update_calendar_events($modulename, $instance = null, $cm = null) {
+    global $DB;
+
+    if (isset($instance) || isset($cm)) {
+
+        if (!isset($instance)) {
+            $instance = $DB->get_record($modulename, array('id' => $cm->instance), '*', MUST_EXIST);
+        }
+        if (!isset($cm)) {
+            $cm = get_coursemodule_from_instance($modulename, $instance->id, $instance->course);
+        }
+        course_module_calendar_event_update_process($instance, $cm);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Update all instances through out the site or in a course.
+ *
+ * @param  string  $modulename Module type to update.
+ * @param  integer $courseid   Course id to update events. 0 for the whole site.
+ * @return bool Returns True if the update was successful.
+ * @since  Moodle 3.3.4
+ */
+function course_module_bulk_update_calendar_events($modulename, $courseid = 0) {
+    global $DB;
+
+    $instances = null;
+    if ($courseid) {
+        if (!$instances = $DB->get_records($modulename, array('course' => $courseid))) {
+            return false;
+        }
+    } else {
+        if (!$instances = $DB->get_records($modulename)) {
+            return false;
+        }
+    }
+
+    foreach ($instances as $instance) {
+        $cm = get_coursemodule_from_instance($modulename, $instance->id, $instance->course);
+        course_module_calendar_event_update_process($instance, $cm);
+    }
+    return true;
+}
+
+/**
+ * Calendar events for a module instance are updated.
+ *
+ * @param  stdClass $instance Module instance object.
+ * @param  stdClass $cm Course Module object.
+ * @since  Moodle 3.3.4
+ */
+function course_module_calendar_event_update_process($instance, $cm) {
+    // We need to call *_refresh_events() first because some modules delete 'old' events at the end of the code which
+    // will remove the completion events.
+    $refresheventsfunction = $cm->modname . '_refresh_events';
+    if (function_exists($refresheventsfunction)) {
+        call_user_func($refresheventsfunction, $cm->course, $instance, $cm);
+    }
+    $completionexpected = (!empty($cm->completionexpected)) ? $cm->completionexpected : null;
+    \core_completion\api::update_completion_date_event($cm->id, $cm->modname, $instance, $completionexpected);
 }
 
 /**
@@ -1611,6 +1689,7 @@ function course_update_section($course, $section, $data) {
 
     // Update record in the DB and course format options.
     $data['id'] = $section->id;
+    $data['timemodified'] = time();
     $DB->update_record('course_sections', $data);
     rebuild_course_cache($courseid, true);
     course_get_format($courseid)->update_section_format_options($data);
@@ -2934,6 +3013,7 @@ class course_request {
         $data->visibleold         = $data->visible;
         $data->lang               = $courseconfig->lang;
         $data->enablecompletion   = $courseconfig->enablecompletion;
+        $data->numsections        = $courseconfig->numsections;
 
         $course = create_course($data);
         $context = context_course::instance($course->id, MUST_EXIST);
@@ -3410,10 +3490,8 @@ function duplicate_module($course, $cm) {
         moveto_module($cm, $section, $newcm);
 
         // Update calendar events with the duplicated module.
-        $refresheventsfunction = $newcm->modname . '_refresh_events';
-        if (function_exists($refresheventsfunction)) {
-            call_user_func($refresheventsfunction, $newcm->course);
-        }
+        // The following line is to be removed in MDL-58906.
+        course_module_update_calendar_events($newcm->modname, null, $newcm);
 
         // Trigger course module created event. We can trigger the event only if we know the newcmid.
         $event = \core\event\course_module_created::create_from_cm($newcm);
@@ -3999,6 +4077,46 @@ function course_check_updates($course, $tocheck, $filter = array()) {
         }
     }
     return array($instances, $warnings);
+}
+
+/**
+ * This function classifies a course as past, in progress or future.
+ *
+ * This function may incur a DB hit to calculate course completion.
+ * @param stdClass $course Course record
+ * @param stdClass $user User record (optional - defaults to $USER).
+ * @param completion_info $completioninfo Completion record for the user (optional - will be fetched if required).
+ * @return string (one of COURSE_TIMELINE_FUTURE, COURSE_TIMELINE_INPROGRESS or COURSE_TIMELINE_PAST)
+ */
+function course_classify_for_timeline($course, $user = null, $completioninfo = null) {
+    global $USER;
+
+    if ($user == null) {
+        $user = $USER;
+    }
+
+    $today = time();
+    // End date past.
+    if (!empty($course->enddate) && $course->enddate < $today) {
+        return COURSE_TIMELINE_PAST;
+    }
+
+    if ($completioninfo == null) {
+        $completioninfo = new completion_info($course);
+    }
+
+    // Course was completed.
+    if ($completioninfo->is_enabled() && $completioninfo->is_course_complete($user->id)) {
+        return COURSE_TIMELINE_PAST;
+    }
+
+    // Start date not reached.
+    if (!empty($course->startdate) && $course->startdate > $today) {
+        return COURSE_TIMELINE_FUTURE;
+    }
+
+    // Everything else is in progress.
+    return COURSE_TIMELINE_INPROGRESS;
 }
 
 /**
