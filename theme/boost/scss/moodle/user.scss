@@ -28,6 +28,11 @@
     }
 }
 
+// This rule overrides the automatic no-overflow on the participants table. It kills the auto-complete.
+#participantsform .no-overflow {
+    overflow: visible;
+}
+
 .userprofile dl.list {
     // Copied from dl.row.
     > dd + dt {
@@ -273,21 +278,6 @@
         div,
         input {
             margin: 0;
-        }
-    }
-}
-
-#groupeditform {
-    .groups,
-    .members {
-        min-width: 175px;
-        width: 49%;
-        float: left;
-        text-align: left;
-
-        select {
-            min-width: 175px;
-            max-width: 90%;
         }
     }
 }

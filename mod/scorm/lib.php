@@ -166,6 +166,9 @@ function scorm_add_instance($scorm, $mform=null) {
 
     scorm_grade_item_update($record);
     scorm_update_calendar($record, $cmid);
+    if (!empty($scorm->completionexpected)) {
+        \core_completion\api::update_completion_date_event($cmid, 'scorm', $record, $scorm->completionexpected);
+    }
 
     return $record->id;
 }
@@ -244,6 +247,8 @@ function scorm_update_instance($scorm, $mform=null) {
     }
 
     $DB->update_record('scorm', $scorm);
+    // We need to find this out before we blow away the form data.
+    $completionexpected = (!empty($scorm->completionexpected)) ? $scorm->completionexpected : null;
 
     $scorm = $DB->get_record('scorm', array('id' => $scorm->id));
 
@@ -257,6 +262,7 @@ function scorm_update_instance($scorm, $mform=null) {
     scorm_grade_item_update($scorm);
     scorm_update_grades($scorm);
     scorm_update_calendar($scorm, $cmid);
+    \core_completion\api::update_completion_date_event($cmid, 'scorm', $scorm, $completionexpected);
 
     return true;
 }
@@ -1586,12 +1592,30 @@ function mod_scorm_get_fontawesome_icon_map() {
  * only scorm events belonging to the course specified are checked.
  *
  * @param int $courseid
+ * @param int|stdClass $instance scorm module instance or ID.
+ * @param int|stdClass $cm Course module object or ID.
  * @return bool
  */
-function scorm_refresh_events($courseid = 0) {
+function scorm_refresh_events($courseid = 0, $instance = null, $cm = null) {
     global $CFG, $DB;
 
     require_once($CFG->dirroot . '/mod/scorm/locallib.php');
+
+    // If we have instance information then we can just update the one event instead of updating all events.
+    if (isset($instance)) {
+        if (!is_object($instance)) {
+            $instance = $DB->get_record('scorm', array('id' => $instance), '*', MUST_EXIST);
+        }
+        if (isset($cm)) {
+            if (!is_object($cm)) {
+                $cm = (object)array('id' => $cm);
+            }
+        } else {
+            $cm = get_coursemodule_from_instance('scorm', $instance->id);
+        }
+        scorm_update_calendar($instance, $cm->id);
+        return true;
+    }
 
     if ($courseid) {
         // Make sure that the course id is numeric.
@@ -1632,6 +1656,11 @@ function mod_scorm_core_calendar_provide_event_action(calendar_event $event,
     require_once($CFG->dirroot . '/mod/scorm/locallib.php');
 
     $cm = get_fast_modinfo($event->courseid)->instances['scorm'][$event->instance];
+
+    if (has_capability('mod/scorm:viewreport', $cm->context)) {
+        // Teachers do not need to be reminded to complete a scorm.
+        return null;
+    }
 
     if (!empty($cm->customdata['timeclose']) && $cm->customdata['timeclose'] < time()) {
         // The scorm has closed so the user can no longer submit anything.

@@ -503,9 +503,29 @@ function file_rewrite_pluginfile_urls($text, $file, $contextid, $component, $fil
  * (more information will be added as needed).
  */
 function file_get_draft_area_info($draftitemid, $filepath = '/') {
-    global $CFG, $USER;
+    global $USER;
 
     $usercontext = context_user::instance($USER->id);
+    return file_get_file_area_info($usercontext->id, 'user', 'draft', $draftitemid, $filepath);
+}
+
+/**
+ * Returns information about files in an area.
+ *
+ * @param int $contextid context id
+ * @param string $component component
+ * @param string $filearea file area name
+ * @param int $itemid item id or all files if not specified
+ * @param string $filepath path to the directory from which the information have to be retrieved.
+ * @return array with the following entries:
+ *      'filecount' => number of files in the area.
+ *      'filesize' => total size of the files in the area.
+ *      'foldercount' => number of folders in the area.
+ *      'filesize_without_references' => total size of the area excluding file references.
+ * @since Moodle 3.4
+ */
+function file_get_file_area_info($contextid, $component, $filearea, $itemid = 0, $filepath = '/') {
+
     $fs = get_file_storage();
 
     $results = array(
@@ -515,11 +535,8 @@ function file_get_draft_area_info($draftitemid, $filepath = '/') {
         'filesize_without_references' => 0
     );
 
-    if ($filepath != '/') {
-        $draftfiles = $fs->get_directory_files($usercontext->id, 'user', 'draft', $draftitemid, $filepath, true, true);
-    } else {
-        $draftfiles = $fs->get_area_files($usercontext->id, 'user', 'draft', $draftitemid, 'id', true);
-    }
+    $draftfiles = $fs->get_directory_files($contextid, $component, $filearea, $itemid, $filepath, true, true);
+
     foreach ($draftfiles as $file) {
         if ($file->is_directory()) {
             $results['foldercount'] += 1;
@@ -955,7 +972,9 @@ function file_save_draft_area_files($draftitemid, $contextid, $component, $filea
                 if (!empty($repoid)) {
                     $context = context::instance_by_id($contextid, MUST_EXIST);
                     $repo = repository::get_repository_by_id($repoid, $context);
-
+                    if (!empty($options)) {
+                        $repo->options = $options;
+                    }
                     $file_record['repositoryid'] = $repoid;
                     // This hook gives the repo a place to do some house cleaning, and update the $reference before it's saved
                     // to the file store. E.g. transfer ownership of the file to a system account etc.
@@ -3869,9 +3888,10 @@ class curl_cache {
  * @param null|string $preview the preview mode, defaults to serving the original file
  * @param boolean $offline If offline is requested - don't serve a redirect to an external file, return a file suitable for viewing
  *                         offline (e.g. mobile app).
+ * @param bool $embed Whether this file will be served embed into an iframe.
  * @todo MDL-31088 file serving improments
  */
-function file_pluginfile($relativepath, $forcedownload, $preview = null, $offline = false) {
+function file_pluginfile($relativepath, $forcedownload, $preview = null, $offline = false, $embed = false) {
     global $DB, $CFG, $USER;
     // relative path must start with '/'
     if (!$relativepath) {
@@ -3895,7 +3915,7 @@ function file_pluginfile($relativepath, $forcedownload, $preview = null, $offlin
 
     $fs = get_file_storage();
 
-    $sendfileoptions = ['preview' => $preview, 'offline' => $offline];
+    $sendfileoptions = ['preview' => $preview, 'offline' => $offline, 'embed' => $embed];
 
     // ========================================================================================================================
     if ($component === 'blog') {
