@@ -194,8 +194,10 @@ class score extends \mod_lti\local\ltiservice\resource_base {
         	$this->params['context_id'] = $COURSE->id;
         	$id = optional_param('id', 0, PARAM_INT); // Course Module ID.
         	if (!empty($id)) {
-        		$cm = get_coursemodule_from_id('lti', $id, 0, false, MUST_EXIST);
-        		$id = $cm->instance;
+        		$cm = get_coursemodule_from_id('lti', $id, 0, false);
+        		if ($cm) {
+	        		$id = $cm->instance;
+        		}
         	}
         	$this->params['result_id'] = $USER->id;
         	
