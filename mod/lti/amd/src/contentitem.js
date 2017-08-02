@@ -63,8 +63,7 @@ define(
                 str.get_string('selectcontent', 'lti').then(function(title) {
                     return ModalFactory.create({
                         title: title,
-                        body: bodyPromise,
-                        large: true
+                        body: bodyPromise
                     });
                 }).then(function(modal) {
                     dialogue = modal;
@@ -79,6 +78,13 @@ define(
 
                     // Display the dialogue.
                     modal.show();
+                    $('.modal-dialog').css({
+                        //width:'auto', 
+                        //height:'auto', 
+                        //'max-height':'100%',
+                        'max-width':'100%',
+                        'margin':'2% 5%'
+                    });
                     return;
                 }).catch(notification.exception);
             }
