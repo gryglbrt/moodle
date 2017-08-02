@@ -79,8 +79,8 @@ define(
                     // Display the dialogue.
                     modal.show();
                     $('.modal-dialog').css({
-                        //width:'auto', 
-                        //height:'auto', 
+                        //width:'auto',
+                        //height:'auto',
                         //'max-height':'100%',
                         'max-width':'100%',
                         'margin':'2% 5%'
