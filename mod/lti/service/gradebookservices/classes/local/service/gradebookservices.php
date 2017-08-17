@@ -58,13 +58,16 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
      */
     public function get_resources() {
 
+        // The containers should be ordered in the array after their elements.
+        // Lineitems should be after lineitem and scores should be after score.
         if (empty($this->resources)) {
             $this->resources = array();
-            $this->resources[] = new \ltiservice_gradebookservices\local\resource\lineitems($this);
             $this->resources[] = new \ltiservice_gradebookservices\local\resource\lineitem($this);
+            $this->resources[] = new \ltiservice_gradebookservices\local\resource\lineitems($this);
             $this->resources[] = new \ltiservice_gradebookservices\local\resource\result($this);
-            $this->resources[] = new \ltiservice_gradebookservices\local\resource\scores($this);
             $this->resources[] = new \ltiservice_gradebookservices\local\resource\score($this);
+            $this->resources[] = new \ltiservice_gradebookservices\local\resource\scores($this);
+
         }
 
         return $this->resources;
