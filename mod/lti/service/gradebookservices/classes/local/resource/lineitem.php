@@ -115,7 +115,7 @@ class lineitem extends \mod_lti\local\ltiservice\resource_base {
      */
     private function get_request($response, $contextid, $item) {
 
-    	$response->set_content_type($this->formats[0]);
+        $response->set_content_type($this->formats[0]);
         $json = gradebookservices::item_to_json($item, parent::get_endpoint(), false, $contextid);
         $response->set_body($json);
 
@@ -139,20 +139,20 @@ class lineitem extends \mod_lti\local\ltiservice\resource_base {
             $item->itemname = $json->label;
             $updategradeitem = true;
         }
-        if (isset($json->lineItemScoreMaximum) && 
-        		grade_floats_different(grade_floatval($item->grademax),
-        				grade_floatval($json->lineItemScoreMaximum))) {
+        if (isset($json->lineItemScoreMaximum) &&
+                grade_floats_different(grade_floatval($item->grademax),
+                        grade_floatval($json->lineItemScoreMaximum))) {
             $item->grademax = grade_floatval($json->scoreConstraints->$maximum);
             $updategradeitem = true;
         }
         if (isset($json->resourceId) && ($item->idnumber !== $json->resourceId)) {
-        	$item->idnumber = $json->resourceId;
-        	$updategradeitem = true;
+            $item->idnumber = $json->resourceId;
+            $updategradeitem = true;
         }
         if (isset($json->resourceLinkId) && is_numeric($json->resourceLinkId) &&
-        		intval($item->iteminstance) !== intval($json->resourceLinkId)) {
-        	$item->iteminstance = intval($json->resourceLinkId);
-        	$updategradeitem = true;
+                intval($item->iteminstance) !== intval($json->resourceLinkId)) {
+            $item->iteminstance = intval($json->resourceLinkId);
+            $updategradeitem = true;
         }
         if ($updategradeitem) {
             if (!$item->update('mod/ltiservice_gradebookservices')) {
@@ -190,20 +190,20 @@ class lineitem extends \mod_lti\local\ltiservice\resource_base {
 
         $item = grade_get_grades($COURSE->id, 'mod', 'lti', $id);
         if ($item) {
-        	$this->params['item_id'] = $item->items[0]->id;
-        	$this->params['context_id'] = $COURSE->id;
-        	$id = optional_param('id', 0, PARAM_INT); // Course Module ID.
-        	if (!empty($id)) {
-        		$cm = get_coursemodule_from_id('lti', $id, 0, false);
-        		if ($cm) {
-	        		$id = $cm->instance;
-        		}
-        	}
-        	$value = str_replace('$LineItem.url', parent::get_endpoint(), $value);
-        	
-        	return $value;
+            $this->params['item_id'] = $item->items[0]->id;
+            $this->params['context_id'] = $COURSE->id;
+            $id = optional_param('id', 0, PARAM_INT); // Course Module ID.
+            if (!empty($id)) {
+                $cm = get_coursemodule_from_id('lti', $id, 0, false);
+                if ($cm) {
+                    $id = $cm->instance;
+                }
+            }
+            $value = str_replace('$LineItem.url', parent::get_endpoint(), $value);
+
+            return $value;
         } else {
-        	return '';
+            return '';
         }
 
     }
