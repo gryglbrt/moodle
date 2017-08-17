@@ -84,7 +84,7 @@ class lineitems extends \mod_lti\local\ltiservice\resource_base {
             if (!$this->check_tool_proxy(null, $response->get_request_data())) {
                 throw new \Exception(null, 401);
             }
-            if (empty($contextid) || !(!$container ^ ($response->get_request_method() === 'POST')) ||
+            if (empty($contextid) || !($container ^ ($response->get_request_method() === 'POST')) ||
                 (!empty($contenttype) && !in_array($contenttype, $this->formats))) {
                 throw new \Exception(null, 400);
             }
