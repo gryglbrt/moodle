@@ -58,13 +58,16 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
      */
     public function get_resources() {
 
+        // The containers should be ordered in the array after their elements.
+        // Lineitems should be after lineitem and scores should be after score.
         if (empty($this->resources)) {
             $this->resources = array();
-            $this->resources[] = new \ltiservice_gradebookservices\local\resource\lineitems($this);
             $this->resources[] = new \ltiservice_gradebookservices\local\resource\lineitem($this);
+            $this->resources[] = new \ltiservice_gradebookservices\local\resource\lineitems($this);
             $this->resources[] = new \ltiservice_gradebookservices\local\resource\result($this);
-            $this->resources[] = new \ltiservice_gradebookservices\local\resource\scores($this);
             $this->resources[] = new \ltiservice_gradebookservices\local\resource\score($this);
+            $this->resources[] = new \ltiservice_gradebookservices\local\resource\scores($this);
+
         }
 
         return $this->resources;
@@ -127,10 +130,10 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
                              AND (t.toolproxyid = :tpid2))
                              OR ((s.toolproxyid = :tpid) AND (i.id = s.gradeitemid)))";
             $params = array('courseid' => $courseid, 'itemid' => $itemid, 'tpid' => $this->get_tool_proxy()->id,
-            		'itemtype' => 'mod', 'itemmodule' => 'lti','tpid2' => $this->get_tool_proxy()->id);
+                    'itemtype' => 'mod', 'itemmodule' => 'lti', 'tpid2' => $this->get_tool_proxy()->id);
         } else {
-        	$where = '(s.toolproxyid = :tpid) AND (i.id = s.gradeitemid)';
-        	$params = array('courseid' => $courseid, 'itemid' => $itemid, 'tpid' => $this->get_tool_proxy()->id);
+            $where = '(s.toolproxyid = :tpid) AND (i.id = s.gradeitemid)';
+            $params = array('courseid' => $courseid, 'itemid' => $itemid, 'tpid' => $this->get_tool_proxy()->id);
         }
         $sql = "SELECT i.*
                   FROM {grade_items} i
@@ -175,9 +178,9 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
         $grade->rawgrademin = grade_floatval(0);
         $max = null;
         if (isset($result->scoreGiven)) {
-        	$grade->rawgrade = grade_floatval($result->scoreGiven);
+            $grade->rawgrade = grade_floatval($result->scoreGiven);
             if (isset($result->scoreMaximum)) {
-            	$max = $result->scoreMaximum;
+                $max = $result->scoreMaximum;
             }
         }
         if (!is_null($max) && grade_floats_different($max, $item->grademax) && grade_floats_different($max, 0.0)) {
@@ -226,19 +229,19 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
         $lineitem->label = $item->itemname;
         $lineitem->lineItemScoreMaximum = intval($item->grademax); // TODO: is int correct?!?
         if (!empty($item->idnumber)) {
-        	$lineitem->resourceId = $item->idnumber;
+            $lineitem->resourceId = $item->idnumber;
         }
         $lineitem->scores = $lineitem->{"@id"} . '/scores';
         if (!empty($item->lineitemtype)) {
-        	$lineitem->lineItemType = $item->lineitemtype;
+            $lineitem->lineItemType = $item->lineitemtype;
         }
         if ($contextid) {
-	        $lineitemof = new \stdClass();
-	        $lineitemof->contextId = $contextid;
-			$lineitem->lineItemOf = $lineitemof;
+            $lineitemof = new \stdClass();
+            $lineitemof->contextId = $contextid;
+            $lineitem->lineItemOf = $lineitemof;
         }
         if (isset($item->iteminstance)) {
-        	$lineitem->resourceLinkId = strval($item->iteminstance);
+            $lineitem->resourceLinkId = strval($item->iteminstance);
         }
         $json = json_encode($lineitem);
 
@@ -286,28 +289,28 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
      * @return string
      */
     public static function score_to_json($grade, $endpoint, $includecontext = false) {
-    	
-    	$id = "{$endpoint}/scores/{$grade->userid}";
-    	$result = new \stdClass();
-    	$result->{"@id"} = $id;
-    	if ($includecontext) {
-    		$result->{"@context"} = 'http://purl.imsglobal.org/ctx/lis/v1/Score';
-    		$result->{"@type"} = 'Score';
-    	}
-    	$result->scoreGiven = $grade->finalgrade;
-    	$result->scoreMaximum = intval($grade->rawgrademax);
-    	if (!empty($grade->feedback)) {
-    		$result->comment = $grade->feedback;
-    	}
-    	//TODO: activityProgress, gradingProgress; might just skip 'em as Moodle corollaries aren't obvious
-    	$result->scoreOf = $endpoint;
-    	$result->timestamp = date('Y-m-d\TH:iO', $grade->timemodified);
-    	$result->resultAgent = new \stdClass();
-    	$result->resultAgent->userId = $grade->userid;
-    	$json = json_encode($result);
-    	
-    	return $json;
-    	
+
+        $id = "{$endpoint}/scores/{$grade->userid}";
+        $result = new \stdClass();
+        $result->{"@id"} = $id;
+        if ($includecontext) {
+            $result->{"@context"} = 'http://purl.imsglobal.org/ctx/lis/v1/Score';
+            $result->{"@type"} = 'Score';
+        }
+        $result->scoreGiven = $grade->finalgrade;
+        $result->scoreMaximum = intval($grade->rawgrademax);
+        if (!empty($grade->feedback)) {
+            $result->comment = $grade->feedback;
+        }
+        // TODO: activityProgress, gradingProgress; might just skip 'em as Moodle corollaries aren't obvious.
+        $result->scoreOf = $endpoint;
+        $result->timestamp = date('Y-m-d\TH:iO', $grade->timemodified);
+        $result->resultAgent = new \stdClass();
+        $result->resultAgent->userId = $grade->userid;
+        $json = json_encode($result);
+
+        return $json;
+
     }
-    
+
 }

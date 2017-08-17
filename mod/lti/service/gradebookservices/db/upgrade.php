@@ -54,7 +54,7 @@
  *
  * @return boolean
  */
- function xmldb_ltiservice_gradebookservices_upgrade($oldversion) {
+function xmldb_ltiservice_gradebookservices_upgrade($oldversion) {
 
     return true;
 

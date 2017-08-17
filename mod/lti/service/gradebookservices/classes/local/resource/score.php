@@ -147,7 +147,7 @@ class score extends \mod_lti\local\ltiservice\resource_base {
         $score = json_decode($body);
         if (empty($score) || !isset($score->{"@type"}) || ($score->{"@type"} != 'Score') ||
         (isset($score->resultAgent) && isset($score->resultAgent->userId) && ($score->resultAgent->userId !== $userid)) ||
-        	(!isset($score->scoreGiven))) {
+            (!isset($score->scoreGiven))) {
             throw new \Exception(null, 400);
         }
         gradebookservices::set_grade_item($item, $result, $userid);
@@ -190,22 +190,22 @@ class score extends \mod_lti\local\ltiservice\resource_base {
 
         $item = grade_get_grades($COURSE->id, 'mod', 'lti', $id);
         if ($item) {
-        	$this->params['item_id'] = $item->items[0]->id;
-        	$this->params['context_id'] = $COURSE->id;
-        	$id = optional_param('id', 0, PARAM_INT); // Course Module ID.
-        	if (!empty($id)) {
-        		$cm = get_coursemodule_from_id('lti', $id, 0, false);
-        		if ($cm) {
-	        		$id = $cm->instance;
-        		}
-        	}
-        	$this->params['result_id'] = $USER->id;
-        	
-        	$value = str_replace('$Score.url', parent::get_endpoint(), $value);
-        	
-        	return $value;
+            $this->params['item_id'] = $item->items[0]->id;
+            $this->params['context_id'] = $COURSE->id;
+            $id = optional_param('id', 0, PARAM_INT); // Course Module ID.
+            if (!empty($id)) {
+                $cm = get_coursemodule_from_id('lti', $id, 0, false);
+                if ($cm) {
+                    $id = $cm->instance;
+                }
+            }
+            $this->params['result_id'] = $USER->id;
+
+            $value = str_replace('$Score.url', parent::get_endpoint(), $value);
+
+            return $value;
         } else {
-        	return '';
+            return '';
         }
 
     }

@@ -70,7 +70,7 @@ class lineitems extends \mod_lti\local\ltiservice\resource_base {
         $resourcelinkid = optional_param('resourcelinkid', null, PARAM_TEXT);
         $limit = optional_param('limit', 0, PARAM_INT);
         $page = optional_param('page', 0, PARAM_INT);
-        
+
         $contextid = $params['context_id'];
         $isget = $response->get_request_method() === 'GET';
         if ($isget) {
@@ -84,15 +84,15 @@ class lineitems extends \mod_lti\local\ltiservice\resource_base {
             if (!$this->check_tool_proxy(null, $response->get_request_data())) {
                 throw new \Exception(null, 401);
             }
-            if (empty($contextid) || !(!$container ^ ($response->get_request_method() === 'POST')) ||
+            if (empty($contextid) || !($container ^ ($response->get_request_method() === 'POST')) ||
                 (!empty($contenttype) && !in_array($contenttype, $this->formats))) {
                 throw new \Exception(null, 400);
             }
 
             switch ($response->get_request_method()) {
                 case 'GET':
-                	$items = $this->get_service()->get_lineitems($contextid);
-                	$json = $this->get_request_json($contextid, $items);
+                    $items = $this->get_service()->get_lineitems($contextid);
+                    $json = $this->get_request_json($contextid, $items);
                     $response->set_content_type($this->formats[0]);
                     break;
                 case 'POST':
@@ -136,7 +136,7 @@ EOD;
         $endpoint = parent::get_endpoint();
         $sep = '        ';
         foreach ($items as $item) {
-        	$json .= $sep . gradebookservices::item_to_json($item, $endpoint, true);
+            $json .= $sep . gradebookservices::item_to_json($item, $endpoint, true);
             $sep = ",\n        ";
         }
         $json .= <<< EOD
@@ -171,11 +171,14 @@ EOD;
         $label = (isset($json->label)) ? $json->label : 'Item ' . time();
         $resourceid = (isset($json->resourceId)) ? $json->resourceId : '';
         $lineitemtype = (isset($json->lineItemType)) ? $json->lineItemType : '';
-        $activity = (isset($json->assignedActivity) && isset($json->assignedActivity->activityId)) ?
-            $json->assignedActivity->activityId : '';
+        if (isset($json->assignedActivity) && isset($json->assignedActivity->activityId)) {
+            $activity = $json->assignedActivity->activityId;
+        } else {
+            $activity = '';
+        }
         $max = 1;
         if (isset($json->lineItemScoreMaximum)) {
-        	$max = $json->lineItemScoreMaximum;
+            $max = $json->lineItemScoreMaximum;
         }
 
         $params = array();
@@ -189,7 +192,7 @@ EOD;
         $item->itemmodule = 'lti';
         $item->idnumber = $resourceid;
         if (isset($json->resourceLinkId) && is_numeric($json->resourceLinkId)) {
-        	$item->iteminstance = $json->resourceLinkId;
+            $item->iteminstance = $json->resourceLinkId;
         }
         $id = $item->insert('mod/ltiservice_gradebookservices');
         try {

@@ -136,7 +136,7 @@ EOD;
         $sep = "\n        ";
         foreach ($grades as $grade) {
             if (!empty($grade->timemodified)) {
-            	$json .= $sep . gradebookservices::score_to_json($grade, $endpoint);
+                $json .= $sep . gradebookservices::score_to_json($grade, $endpoint);
                 $sep = ",\n        ";
             }
         }
@@ -188,21 +188,21 @@ EOD;
 
         $item = grade_get_grades($COURSE->id, 'mod', 'lti', $id);
         if ($item) {
-        	$this->params['context_id'] = $COURSE->id;
-        	$id = optional_param('id', 0, PARAM_INT); // Course Module ID.
-        	if (!empty($id)) {
-        		$cm = get_coursemodule_from_id('lti', $id, 0, false);
-        		if ($cm) {
-        			$id = $cm->instance;
-        		}
-        	}
-        	$this->params['item_id'] = $item->items[0]->id;
-        	
-        	$value = str_replace('$Scores.url', parent::get_endpoint(), $value);
-        	
-        	return $value;
+            $this->params['context_id'] = $COURSE->id;
+            $id = optional_param('id', 0, PARAM_INT); // Course Module ID.
+            if (!empty($id)) {
+                $cm = get_coursemodule_from_id('lti', $id, 0, false);
+                if ($cm) {
+                    $id = $cm->instance;
+                }
+            }
+            $this->params['item_id'] = $item->items[0]->id;
+
+            $value = str_replace('$Scores.url', parent::get_endpoint(), $value);
+
+            return $value;
         } else {
-        	return '';
+            return '';
         }
 
     }
