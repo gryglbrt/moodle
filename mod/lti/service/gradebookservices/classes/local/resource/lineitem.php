@@ -142,7 +142,7 @@ class lineitem extends \mod_lti\local\ltiservice\resource_base {
         if (isset($json->lineItemScoreMaximum) &&
                 grade_floats_different(grade_floatval($item->grademax),
                         grade_floatval($json->lineItemScoreMaximum))) {
-            $item->grademax = grade_floatval($json->scoreConstraints->$maximum);
+            $item->grademax = grade_floatval($json->lineItemScoreMaximum);
             $updategradeitem = true;
         }
         if (isset($json->resourceId) && ($item->idnumber !== $json->resourceId)) {
