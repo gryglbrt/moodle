@@ -128,18 +128,18 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
             $where = "(((i.itemtype = :itemtype)
                              AND (i.itemmodule = :itemmodule)
                              AND (t.toolproxyid = :tpid2))
-                             OR ((s.toolproxyid = :tpid) AND (i.id = s.gradeitemid)))";
+                             OR ((s.toolproxyid = :tpid) AND (i.itemnumber = s.id)))";
             $params = array('courseid' => $courseid, 'itemid' => $itemid, 'tpid' => $this->get_tool_proxy()->id,
                     'itemtype' => 'mod', 'itemmodule' => 'lti', 'tpid2' => $this->get_tool_proxy()->id);
         } else {
-            $where = '(s.toolproxyid = :tpid) AND (i.id = s.gradeitemid)';
+            $where = '(s.toolproxyid = :tpid) AND (i.itemnumber = s.id)';
             $params = array('courseid' => $courseid, 'itemid' => $itemid, 'tpid' => $this->get_tool_proxy()->id);
         }
         $sql = "SELECT i.*
                   FROM {grade_items} i
              LEFT JOIN {lti} m ON i.iteminstance = m.id
              LEFT JOIN {lti_types} t ON m.typeid = t.id
-             LEFT JOIN {ltiservice_gradebookservices} s ON i.id = s.gradeitemid
+             LEFT JOIN {ltiservice_gradebookservices} s ON i.itemnumber = s.id
                  WHERE (i.courseid = :courseid)
                        AND (i.id = :itemid)
                        AND {$where}";

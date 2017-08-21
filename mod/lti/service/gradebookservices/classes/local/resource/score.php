@@ -150,7 +150,7 @@ class score extends \mod_lti\local\ltiservice\resource_base {
             (!isset($score->scoreGiven))) {
             throw new \Exception(null, 400);
         }
-        gradebookservices::set_grade_item($item, $result, $userid);
+        gradebookservices::set_grade_item($item, $score, $userid);
 
     }
 
