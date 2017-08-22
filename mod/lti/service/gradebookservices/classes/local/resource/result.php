@@ -88,12 +88,9 @@ class result extends \mod_lti\local\ltiservice\resource_base {
 
             require_once($CFG->libdir.'/gradelib.php');
 
-            $grade = \grade_grade::fetch(array('itemid' => $itemid, 'userid' => $resultid));
-            if ($grade === false) {
-                throw new \Exception(null, 400);
-            }
             $response->set_content_type($this->formats[0]);
-            $json = $this->get_request_json($grade);
+            $grade = \grade_grade::fetch(array('itemid' => $itemid, 'userid' => $resultid));
+            $json = $this->get_request_json($grade, $resultid);
             $response->set_body($json);
 
         } catch (\Exception $e) {
@@ -106,17 +103,22 @@ class result extends \mod_lti\local\ltiservice\resource_base {
      * Generate the JSON for a GET request.
      *
      * @param object $grade       Grade instance
+     * @param object $resultid    The id of the result
      *
      * return string
      */
-    private function get_request_json($grade) {
+    private function get_request_json($grade, $resultid) {
 
-        if (empty($grade->timemodified)) {
-            throw new \Exception(null, 400);
-        }
         $lineitem = new lineitem($this->get_service());
-        $json = gradebookservices::result_to_json($grade, $lineitem->get_endpoint(), true);
-
+        if (empty($grade->finalgrade)) {
+            $grade->userid = $resultid;
+            $json = gradebookservices::result_to_json($grade, $lineitem->get_endpoint(), true);
+        } else {
+            if (empty($grade->timemodified)) {
+                throw new \Exception(null, 400);
+            }
+            $json = gradebookservices::result_to_json($grade, $lineitem->get_endpoint(), true);
+        }
         return $json;
 
     }

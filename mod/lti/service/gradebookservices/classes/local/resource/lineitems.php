@@ -170,7 +170,7 @@ EOD;
         require_once($CFG->libdir.'/gradelib.php');
         $label = (isset($json->label)) ? $json->label : 'Item ' . time();
         $resourceid = (isset($json->resourceId)) ? $json->resourceId : '';
-        $lineitemtype = (isset($json->lineItemType)) ? $json->lineItemType : '';
+        $lineitemtoolproviderid = (isset($json->lineItemToolProviderId)) ? $json->lineItemToolProviderId : '';
         if (isset($json->assignedActivity) && isset($json->assignedActivity->activityId)) {
             $activity = $json->assignedActivity->activityId;
         } else {
@@ -184,7 +184,7 @@ EOD;
         try {
             $gradebookservicesid = $DB->insert_record('ltiservice_gradebookservices', array(
                 'toolproxyid' => $this->get_service()->get_tool_proxy()->id,
-                     'lineitemtype' => $lineitemtype
+                    'lineitemtoolproviderid' => $lineitemtoolproviderid
             ));
         } catch (\Exception $e) {
             throw new \Exception(null, 500);
@@ -207,6 +207,11 @@ EOD;
         $id = $item->insert('mod/ltiservice_gradebookservices');
         $json->{"@id"} = parent::get_endpoint() . "/{$id}";
         $json->scores = parent::get_endpoint() . "/{$id}/scores";
+        if ($contextid) {
+            $lineitemof = new \stdClass();
+            $lineitemof->contextId = $contextid;
+            $json->lineItemOf = $lineitemof;
+        }
 
         return json_encode($json);
 

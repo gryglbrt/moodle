@@ -84,17 +84,17 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
     public function get_lineitems($courseid) {
         global $DB;
 
-        $sql = "SELECT i.*
+        $sql = "SELECT i.*,s.lineitemtoolproviderid
                   FROM {grade_items} i
              LEFT JOIN {lti} m ON i.iteminstance = m.id
              LEFT JOIN {lti_types} t ON m.typeid = t.id
-             LEFT JOIN {ltiservice_gradebookservices} s ON i.id = s.gradeitemid
+             LEFT JOIN {ltiservice_gradebookservices} s ON i.itemnumber = s.id
                  WHERE (i.courseid = :courseid)
                        AND (((i.itemtype = :itemtype)
                              AND (i.itemmodule = :itemmodule)
                              AND (t.toolproxyid = :tpid))
                             OR ((s.toolproxyid = :tpid2)
-                                AND (i.id = s.gradeitemid)))";
+                                AND (i.itemnumber = s.id)))";
         $params = array('courseid' => $courseid, 'itemtype' => 'mod', 'itemmodule' => 'lti',
                         'tpid' => $this->get_tool_proxy()->id,
                         'tpid2' => $this->get_tool_proxy()->id
@@ -135,7 +135,7 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
             $where = '(s.toolproxyid = :tpid) AND (i.itemnumber = s.id)';
             $params = array('courseid' => $courseid, 'itemid' => $itemid, 'tpid' => $this->get_tool_proxy()->id);
         }
-        $sql = "SELECT i.*
+        $sql = "SELECT i.*,s.lineitemtoolproviderid
                   FROM {grade_items} i
              LEFT JOIN {lti} m ON i.iteminstance = m.id
              LEFT JOIN {lti_types} t ON m.typeid = t.id
@@ -232,8 +232,8 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
             $lineitem->resourceId = $item->idnumber;
         }
         $lineitem->scores = $lineitem->{"@id"} . '/scores';
-        if (!empty($item->lineitemtype)) {
-            $lineitem->lineItemType = $item->lineitemtype;
+        if (!empty($item->lineitemtoolproviderid)) {
+            $lineitem->lineItemToolProviderId = $item->lineitemtoolproviderid;
         }
         if ($contextid) {
             $lineitemof = new \stdClass();
@@ -260,6 +260,7 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
      */
     public static function result_to_json($grade, $endpoint, $includecontext = false) {
 
+        $endpoint = substr($endpoint, 0, strripos($endpoint, '/'));
         $id = "{$endpoint}/results/{$grade->userid}";
         $result = new \stdClass();
         $result->{"@id"} = $id;
@@ -267,12 +268,14 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
             $result->{"@context"} = 'http://purl.imsglobal.org/ctx/lis/v2p1/Result';
             $result->{"@type"} = 'Result';
         }
-        $result->resultScore = $grade->finalgrade;
-        $result->resultMaximum = intval($grade->rawgrademax);
-        if (!empty($grade->feedback)) {
-            $result->comment = $grade->feedback;
+        if (!empty($grade->finalgrade)) {
+            $result->resultScore = $grade->finalgrade;
+            $result->resultMaximum = intval($grade->rawgrademax);
+            if (!empty($grade->feedback)) {
+                $result->comment = $grade->feedback;
+            }
+            $result->timestamp = date('Y-m-d\TH:iO', $grade->timemodified);
         }
-        $result->timestamp = date('Y-m-d\TH:iO', $grade->timemodified);
         $json = json_encode($result);
 
         return $json;
@@ -290,6 +293,7 @@ class gradebookservices extends \mod_lti\local\ltiservice\service_base {
      */
     public static function score_to_json($grade, $endpoint, $includecontext = false) {
 
+        $endpoint = substr($endpoint, 0, strripos($endpoint, '/'));
         $id = "{$endpoint}/scores/{$grade->userid}";
         $result = new \stdClass();
         $result->{"@id"} = $id;

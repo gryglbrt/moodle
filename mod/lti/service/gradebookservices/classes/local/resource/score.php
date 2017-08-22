@@ -52,7 +52,6 @@ class score extends \mod_lti\local\ltiservice\resource_base {
         $this->template = '/{context_id}/lineitems/{item_id}/scores/{result_id}/score';
         $this->variables[] = 'Score.url';
         $this->formats[] = 'application/vnd.ims.lis.v1.score+json';
-        $this->methods[] = 'GET';
         $this->methods[] = 'PUT';
         $this->methods[] = 'DELETE';
 
@@ -70,6 +69,10 @@ class score extends \mod_lti\local\ltiservice\resource_base {
         $contextid = $params['context_id'];
         $itemid = $params['item_id'];
         $resultid = $params['result_id'];
+
+        // GET is disabled by the moment, but we have the code ready
+        // for a future implementation.
+
         $isget = $response->get_request_method() === 'GET';
         if ($isget) {
             $contenttype = $response->get_accept();
@@ -96,15 +99,19 @@ class score extends \mod_lti\local\ltiservice\resource_base {
             }
             switch ($response->get_request_method()) {
                 case 'GET':
-                    $response->set_content_type($this->formats[0]);
-                    $json = $this->get_request_json($grade);
-                    $response->set_body($json);
+                    // $response->set_content_type($this->formats[0]);
+                    // $json = $this->get_request_json($grade);
+                    // $response->set_body($json);
+                    $response->set_code(405);
                     break;
                 case 'PUT':
-                    $this->put_request($response->get_request_data(), $item, $resultid);
+                    $json = $this->put_request($response->get_request_data(), $item, $resultid);
+                    $response->set_body($json);
+                    $response->set_code(200);
                     break;
                 case 'DELETE':
                     $this->delete_request($item, $resultid);
+                    $response->set_code(200);
                     break;
                 default:  // Should not be possible.
                     throw new \Exception(null, 405);
@@ -115,6 +122,9 @@ class score extends \mod_lti\local\ltiservice\resource_base {
         }
 
     }
+
+    // This code is not used because the GET is disabled, but it
+    // stays here to make easier a future implementation.
 
     /**
      * Generate the JSON for a GET request.
@@ -135,6 +145,7 @@ class score extends \mod_lti\local\ltiservice\resource_base {
 
     }
 
+
     /**
      * Process a PUT request.
      *
@@ -147,10 +158,20 @@ class score extends \mod_lti\local\ltiservice\resource_base {
         $score = json_decode($body);
         if (empty($score) || !isset($score->{"@type"}) || ($score->{"@type"} != 'Score') ||
         (isset($score->resultAgent) && isset($score->resultAgent->userId) && ($score->resultAgent->userId !== $userid)) ||
-            (!isset($score->scoreGiven))) {
+        (!isset($score->scoreGiven))||(!isset($score->gradingProgress))) {
             throw new \Exception(null, 400);
         }
-        gradebookservices::set_grade_item($item, $score, $userid);
+        if ($score->gradingProgress == "FullyGraded") {
+            gradebookservices::set_grade_item($item, $score, $userid);
+        } else {
+            $this->delete_request($item, $score->resultAgent->userId);
+        }
+        $lineitem = new lineitem($this->get_service());
+        $endpoint = $lineitem->get_endpoint();
+        $endpoint = substr($endpoint, 0, strripos($endpoint, '/'));
+        $id = "{$endpoint}/scores/{$score->resultAgent->userId}";
+        $score->{"@id"} = $id;
+        return json_encode($score);
 
     }
 
