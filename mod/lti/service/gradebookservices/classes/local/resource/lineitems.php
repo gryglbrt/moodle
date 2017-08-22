@@ -181,6 +181,15 @@ EOD;
             $max = $json->lineItemScoreMaximum;
         }
 
+        try {
+            $gradebookservicesid = $DB->insert_record('ltiservice_gradebookservices', array(
+                'toolproxyid' => $this->get_service()->get_tool_proxy()->id,
+                     'lineitemtype' => $lineitemtype
+            ));
+        } catch (\Exception $e) {
+            throw new \Exception(null, 500);
+        }
+
         $params = array();
         $params['itemname'] = $label;
         $params['gradetype'] = GRADE_TYPE_VALUE;
@@ -190,20 +199,12 @@ EOD;
         \grade_item::set_properties($item, $params);
         $item->itemtype = 'mod';
         $item->itemmodule = 'lti';
+        $item->itemnumber = $gradebookservicesid;
         $item->idnumber = $resourceid;
         if (isset($json->resourceLinkId) && is_numeric($json->resourceLinkId)) {
             $item->iteminstance = $json->resourceLinkId;
         }
         $id = $item->insert('mod/ltiservice_gradebookservices');
-        try {
-            $DB->insert_record('ltiservice_gradebookservices', array(
-                'toolproxyid' => $this->get_service()->get_tool_proxy()->id,
-                'gradeitemid' => $id,
-                'lineitemtype' => $lineitemtype
-            ));
-        } catch (\Exception $e) {
-            throw new \Exception(null, 500);
-        }
         $json->{"@id"} = parent::get_endpoint() . "/{$id}";
         $json->scores = parent::get_endpoint() . "/{$id}/scores";
 
