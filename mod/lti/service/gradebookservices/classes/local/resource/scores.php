@@ -53,7 +53,6 @@ class scores extends \mod_lti\local\ltiservice\resource_base {
         $this->variables[] = 'Scores.url';
         $this->formats[] = 'application/vnd.ims.lis.v1.scorecontainer+json';
         $this->formats[] = 'application/vnd.ims.lis.v1.score+json';
-        $this->methods[] = 'GET';
         $this->methods[] = 'POST';
 
     }
@@ -69,6 +68,9 @@ class scores extends \mod_lti\local\ltiservice\resource_base {
         $params = $this->parse_template();
         $contextid = $params['context_id'];
         $itemid = $params['item_id'];
+
+        // GET is disabled by the moment, but we have the code ready
+        // for a future implementation.
 
         $isget = $response->get_request_method() === 'GET';
         if ($isget) {
@@ -92,8 +94,10 @@ class scores extends \mod_lti\local\ltiservice\resource_base {
             require_once($CFG->libdir.'/gradelib.php');
             switch ($response->get_request_method()) {
                 case 'GET':
-                    $json = $this->get_request_json($item->id);
-                    $response->set_content_type($this->formats[0]);
+                    // $json = $this->get_request_json($item->id);
+                    // $response->set_content_type($this->formats[0]);
+                    // $response->set_body($json);
+                    $response->set_code(405);
                     break;
                 case 'POST':
                     $json = $this->post_request_json($response->get_request_data(), $item);
@@ -110,6 +114,9 @@ class scores extends \mod_lti\local\ltiservice\resource_base {
         }
 
     }
+
+    // This code is not used because the GET is disabled, but it
+    // stays here to make easier a future implementation.
 
     /**
      * Generate the JSON for a GET request.
@@ -164,15 +171,43 @@ EOD;
         $result = json_decode($body);
         if (empty($result) || !isset($result->{"@type"}) || ($result->{"@type"} != 'Score') ||
             !isset($result->resultAgent) || !isset($result->resultAgent->userId) ||
-            !isset($result->scoreGiven)) {
+            !isset($result->scoreGiven)|| !isset($result->gradingProgress)) {
             throw new \Exception(null, 400);
         }
-        gradebookservices::set_grade_item($item, $result, $result->resultAgent->userId);
-        $result->{"@id"} = parent::get_endpoint() . "/{$result->resultAgent->userId}";
-
+        if ($result->gradingProgress != 'FullyGraded') {
+            $this->reset_result($item, $result->resultAgent->userId);
+        } else {
+            gradebookservices::set_grade_item($item, $result, $result->resultAgent->userId);
+        }
+        $lineitem = new lineitem($this->get_service());
+        $endpoint = $lineitem->get_endpoint();
+        $id = "{$endpoint}/scores/{$result->resultAgent->userId}";
+        $result->{"@id"} = $id;
         return json_encode($result);
 
     }
+
+    /**
+     * Reset a Result.
+     *
+     * @param object $item       Lineitem instance
+     * @param string  $userid    User ID
+     */
+    private function reset_result($item, $userid) {
+
+        $grade = new \stdClass();
+        $grade->userid = $userid;
+        $grade->rawgrade = null;
+        $grade->feedback = null;
+        $grade->feedbackformat = FORMAT_MOODLE;
+        $status = grade_update('mod/ltiservice_gradebookservices', $item->courseid, $item->itemtype, $item->itemmodule,
+                $item->iteminstance, $item->itemnumber, $grade);
+        if ($status !== GRADE_UPDATE_OK) {
+            throw new \Exception(null, 500);
+        }
+
+    }
+
 
     /**
      * Parse a value for custom parameter substitution variables.
