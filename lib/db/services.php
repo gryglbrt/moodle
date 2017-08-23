@@ -58,6 +58,16 @@ $functions = array(
         'capabilities'  => 'moodle/badges:viewotherbadges',
         'services'      => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
     ),
+    'core_calendar_get_calendar_monthly_view' => array(
+        'classname' => 'core_calendar_external',
+        'methodname' => 'get_calendar_monthly_view',
+        'description' => 'Fetch the monthly view data for a calendar',
+        'classpath' => 'calendar/externallib.php',
+        'type' => 'read',
+        'capabilities' => '',
+        'ajax' => true,
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
     'core_calendar_create_calendar_events' => array(
         'classname' => 'core_calendar_external',
         'methodname' => 'create_calendar_events',
@@ -125,6 +135,15 @@ $functions = array(
         'capabilities' => 'moodle/calendar:manageentries, moodle/calendar:manageownentries, moodle/calendar:managegroupentries',
         'ajax' => true,
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
+    'core_calendar_submit_create_update_form' => array(
+        'classname' => 'core_calendar_external',
+        'methodname' => 'submit_create_update_form',
+        'description' => 'Submit form data for event form',
+        'classpath' => 'calendar/externallib.php',
+        'type' => 'write',
+        'capabilities' => 'moodle/calendar:manageentries, moodle/calendar:manageownentries, moodle/calendar:managegroupentries',
+        'ajax' => true,
     ),
     'core_cohort_add_cohort_members' => array(
         'classname' => 'core_cohort_external',
@@ -481,6 +500,14 @@ $functions = array(
         'type' => 'read',
         'capabilities' => 'moodle/course:viewparticipants',
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
+    'core_enrol_edit_user_enrolment' => array(
+        'classname' => 'core_enrol_external',
+        'methodname' => 'edit_user_enrolment',
+        'classpath' => 'enrol/externallib.php',
+        'description' => 'External function that updates a given user enrolment',
+        'type' => 'write',
+        'ajax' => true,
     ),
     'core_fetch_notifications' => array(
         'classname' => 'core_external',

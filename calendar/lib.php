@@ -2148,20 +2148,7 @@ function calendar_get_link_href($linkbase, $d, $m, $y, $time = 0) {
         $linkbase = new \moodle_url($linkbase);
     }
 
-    // If a day, month and year were passed then convert it to a timestamp. If these were passed
-    // then we can assume the day, month and year are passed as Gregorian, as no where in core
-    // should we be passing these values rather than the time.
-    if (!empty($d) && !empty($m) && !empty($y)) {
-        if (checkdate($m, $d, $y)) {
-            $time = make_timestamp($y, $m, $d);
-        } else {
-            $time = time();
-        }
-    } else if (empty($time)) {
-        $time = time();
-    }
-
-    $linkbase->param('time', $time);
+    $linkbase->param('time', calendar_get_timestamp($d, $m, $y, $time));
 
     return $linkbase;
 }
@@ -2186,7 +2173,11 @@ function calendar_get_link_previous($text, $linkbase, $d, $m, $y, $accesshide = 
         return $text;
     }
 
-    return link_arrow_left($text, (string)$href, $accesshide, 'previous');
+    $attrs = [
+        'data-time' => calendar_get_timestamp($d, $m, $y, $time),
+    ];
+
+    return link_arrow_left($text, $href->out(false), $accesshide, 'previous', $attrs);
 }
 
 /**
@@ -2209,7 +2200,11 @@ function calendar_get_link_next($text, $linkbase, $d, $m, $y, $accesshide = fals
         return $text;
     }
 
-    return link_arrow_right($text, (string)$href, $accesshide, 'next');
+    $attrs = [
+        'data-time' => calendar_get_timestamp($d, $m, $y, $time),
+    ];
+
+    return link_arrow_right($text, $href->out(false), $accesshide, 'next', $attrs);
 }
 
 /**
@@ -2494,6 +2489,17 @@ function calendar_edit_event_allowed($event) {
 }
 
 /**
+ * Return the capability for deleting a calendar event.
+ *
+ * @param calendar_event $event The event object
+ * @return bool Whether the user has permission to delete the event or not.
+ */
+function calendar_delete_event_allowed($event) {
+    // Only allow delete if you have capabilities and it is not an module event.
+    return (calendar_edit_event_allowed($event) && empty($event->modulename));
+}
+
+/**
  * Returns the default courses to display on the calendar when there isn't a specific
  * course to display.
  *
@@ -2686,8 +2692,9 @@ function calendar_set_event_type_display($type, $display = null, $user = null) {
  *
  * @param stdClass $allowed list of allowed edit for event  type
  * @param stdClass|int $course object of a course or course id
+ * @param array $groups array of groups for the given course
  */
-function calendar_get_allowed_types(&$allowed, $course = null) {
+function calendar_get_allowed_types(&$allowed, $course = null, $groups = null) {
     global $USER, $DB;
 
     $allowed = new \stdClass();
@@ -2695,6 +2702,23 @@ function calendar_get_allowed_types(&$allowed, $course = null) {
     $allowed->groups = false;
     $allowed->courses = false;
     $allowed->site = has_capability('moodle/calendar:manageentries', \context_course::instance(SITEID));
+    $getgroupsfunc = function($course, $context, $user) use ($groups) {
+        if ($course->groupmode != NOGROUPS || !$course->groupmodeforce) {
+            if (has_capability('moodle/site:accessallgroups', $context)) {
+                return is_null($groups) ? groups_get_all_groups($course->id) : $groups;
+            } else {
+                if (is_null($groups)) {
+                    return groups_get_all_groups($course->id, $user->id);
+                } else {
+                    return array_filter($groups, function($group) use ($user) {
+                        return isset($group->members[$user->id]);
+                    });
+                }
+            }
+        }
+
+        return false;
+    };
 
     if (!empty($course)) {
         if (!is_object($course)) {
@@ -2706,25 +2730,82 @@ function calendar_get_allowed_types(&$allowed, $course = null) {
 
             if (has_capability('moodle/calendar:manageentries', $coursecontext)) {
                 $allowed->courses = array($course->id => 1);
-
-                if ($course->groupmode != NOGROUPS || !$course->groupmodeforce) {
-                    if (has_capability('moodle/site:accessallgroups', $coursecontext)) {
-                        $allowed->groups = groups_get_all_groups($course->id);
-                    } else {
-                        $allowed->groups = groups_get_all_groups($course->id, $USER->id);
-                    }
-                }
+                $allowed->groups = $getgroupsfunc($course, $coursecontext, $USER);
             } else if (has_capability('moodle/calendar:managegroupentries', $coursecontext)) {
-                if ($course->groupmode != NOGROUPS || !$course->groupmodeforce) {
-                    if (has_capability('moodle/site:accessallgroups', $coursecontext)) {
-                        $allowed->groups = groups_get_all_groups($course->id);
-                    } else {
-                        $allowed->groups = groups_get_all_groups($course->id, $USER->id);
-                    }
-                }
+                $allowed->groups = $getgroupsfunc($course, $coursecontext, $USER);
             }
         }
     }
+}
+
+/**
+ * Get all of the allowed types for all of the courses and groups
+ * the logged in user belongs to.
+ *
+ * The returned array will optionally have 5 keys:
+ *      'user' : true if the logged in user can create user events
+ *      'site' : true if the logged in user can create site events
+ *      'course' : array of courses that the user can create events for
+ *      'group': array of groups that the user can create events for
+ *      'groupcourses' : array of courses that the groups belong to (can
+ *                       be different from the list in 'course'.
+ *
+ * @return array The array of allowed types.
+ */
+function calendar_get_all_allowed_types() {
+    global $CFG, $USER;
+
+    require_once($CFG->libdir . '/enrollib.php');
+
+    $types = [];
+
+    calendar_get_allowed_types($allowed);
+
+    if ($allowed->user) {
+        $types['user'] = true;
+    }
+
+    if ($allowed->site) {
+        $types['site'] = true;
+    }
+
+    // This function warms the context cache for the course so the calls
+    // to load the course context in calendar_get_allowed_types don't result
+    // in additional DB queries.
+    $courses = enrol_get_users_courses($USER->id, true);
+    // We want to pre-fetch all of the groups for each course in a single
+    // query to avoid calendar_get_allowed_types from hitting the DB for
+    // each separate course.
+    $groups = groups_get_all_groups_for_courses($courses);
+
+    foreach ($courses as $course) {
+        $coursegroups = isset($groups[$course->id]) ? $groups[$course->id] : null;
+        calendar_get_allowed_types($allowed, $course, $coursegroups);
+
+        if (!empty($allowed->courses)) {
+            if (!isset($types['course'])) {
+                $types['course'] = [$course];
+            } else {
+                $types['course'][] = $course;
+            }
+        }
+
+        if (!empty($allowed->groups)) {
+            if (!isset($types['groupcourses'])) {
+                $types['groupcourses'] = [$course];
+            } else {
+                $types['groupcourses'][] = $course;
+            }
+
+            if (!isset($types['group'])) {
+                $types['group'] = array_values($allowed->groups);
+            } else {
+                $types['group'] = array_merge($types['group'], array_values($allowed->groups));
+            }
+        }
+    }
+
+    return $types;
 }
 
 /**
@@ -2944,7 +3025,8 @@ function calendar_add_icalendar_event($event, $courseid, $subscriptionid, $timez
         // Check to see if the event started at Midnight on the imported calendar.
         date_default_timezone_set($timezone);
         if (date('H:i:s', $eventrecord->timestart) === "00:00:00") {
-            // This event should be an all day event.
+            // This event should be an all day event. This is not correct, we don't do anything differently for all day events.
+            // See MDL-56227.
             $eventrecord->timeduration = 0;
         }
         \core_date::set_default_server_timezone();
@@ -3338,4 +3420,216 @@ function calendar_get_legacy_events($tstart, $tend, $users, $groups, $courses, $
     return array_reduce($events, function($carry, $event) use ($mapper) {
         return $carry + [$event->get_id() => $mapper->from_event_to_stdclass($event)];
     }, []);
+}
+
+
+/**
+ * Get the calendar view output.
+ *
+ * @param   \calendar_information $calendar The calendar being represented
+ * @param   string      $view The type of calendar to have displayed
+ * @return  array[array, string]
+ */
+function calendar_get_view(\calendar_information $calendar, $view) {
+    global $PAGE, $CFG;
+
+    $renderer = $PAGE->get_renderer('core_calendar');
+    $type = \core_calendar\type_factory::get_calendar_instance();
+
+    // Calculate the bounds of the month.
+    $date = $type->timestamp_to_date_array($calendar->time);
+    $tstart = $type->convert_to_timestamp($date['year'], $date['mon'], 1);
+
+    if ($view === 'day') {
+        $tend = $tstart + DAYSECS - 1;
+        $selectortitle = get_string('dayviewfor', 'calendar');
+    } else if ($view === 'upcoming') {
+        if (isset($CFG->calendar_lookahead)) {
+            $defaultlookahead = intval($CFG->calendar_lookahead);
+        } else {
+            $defaultlookahead = CALENDAR_DEFAULT_UPCOMING_LOOKAHEAD;
+        }
+        $tend = $tstart + get_user_preferences('calendar_lookahead', $defaultlookahead);
+        $selectortitle = get_string('upcomingeventsfor', 'calendar');
+    } else {
+        $monthdays = $type->get_num_days_in_month($date['year'], $date['mon']);
+        $tend = $tstart + ($monthdays * DAYSECS) - 1;
+        $selectortitle = get_string('detailedmonthviewfor', 'calendar');
+    }
+
+    list($userparam, $groupparam, $courseparam) = array_map(function($param) {
+        // If parameter is true, return null.
+        if ($param === true) {
+            return null;
+        }
+
+        // If parameter is false, return an empty array.
+        if ($param === false) {
+            return [];
+        }
+
+        // If the parameter is a scalar value, enclose it in an array.
+        if (!is_array($param)) {
+            return [$param];
+        }
+
+        // No normalisation required.
+        return $param;
+    }, [$calendar->users, $calendar->groups, $calendar->courses]);
+
+    $events = \core_calendar\local\api::get_events(
+        $tstart,
+        $tend,
+        null,
+        null,
+        null,
+        null,
+        40,
+        null,
+        $userparam,
+        $groupparam,
+        $courseparam,
+        true,
+        true,
+        function ($event) {
+            if ($proxy = $event->get_course_module()) {
+                $cminfo = $proxy->get_proxied_instance();
+                return $cminfo->uservisible;
+
+            }
+
+            return true;
+        }
+    );
+
+    $related = [
+        'events' => $events,
+        'cache' => new \core_calendar\external\events_related_objects_cache($events),
+    ];
+
+    $month = new \core_calendar\external\month_exporter($calendar, $type, $related);
+    $data = $month->export($renderer);
+    $template = 'core_calendar/month_detailed';
+
+    return [$data, $template];
+}
+
+/**
+ * Request and render event form fragment.
+ *
+ * @param array $args The fragment arguments.
+ * @return string The rendered mform fragment.
+ */
+function calendar_output_fragment_event_form($args) {
+    global $CFG, $OUTPUT;
+    require_once($CFG->dirroot.'/calendar/event_form.php');
+
+    $html = '';
+    $data = null;
+    $eventid = isset($args['eventid']) ? clean_param($args['eventid'], PARAM_INT) : null;
+    $event = null;
+    $hasformdata = isset($args['formdata']) && !empty($args['formdata']);
+    $formoptions = [];
+
+    if ($hasformdata) {
+        parse_str(clean_param($args['formdata'], PARAM_TEXT), $data);
+    }
+
+    if (isset($args['haserror'])) {
+        $formoptions['haserror'] = clean_param($args['haserror'], PARAM_BOOL);
+    }
+
+    if (is_null($eventid)) {
+        $mform = new \core_calendar\local\event\forms\create(
+            null,
+            $formoptions,
+            'post',
+            '',
+            null,
+            true,
+            $data
+        );
+    } else {
+        $event = calendar_event::load($eventid);
+        $event->count_repeats();
+        $formoptions['event'] = $event;
+        $mform = new \core_calendar\local\event\forms\update(
+            null,
+            $formoptions,
+            'post',
+            '',
+            null,
+            true,
+            $data
+        );
+    }
+
+    if ($hasformdata) {
+        $mform->is_validated();
+    } else if (!is_null($event)) {
+        $mapper = new \core_calendar\local\event\mappers\create_update_form_mapper();
+        $data = $mapper->from_legacy_event_to_data($event);
+        $mform->set_data($data);
+
+        // Check to see if this event is part of a subscription or import.
+        // If so display a warning on edit.
+        if (isset($event->subscriptionid) && ($event->subscriptionid != null)) {
+            $renderable = new \core\output\notification(
+                get_string('eventsubscriptioneditwarning', 'calendar'),
+                \core\output\notification::NOTIFY_INFO
+            );
+
+            $html .= $OUTPUT->render($renderable);
+        }
+    }
+
+    $html .= $mform->render();
+    return $html;
+}
+
+/**
+ * Calculate the timestamp from the supplied Gregorian Year, Month, and Day.
+ *
+ * @param   int     $d The day
+ * @param   int     $m The month
+ * @param   int     $y The year
+ * @param   int     $time The timestamp to use instead of a separate y/m/d.
+ * @return  int     The timestamp
+ */
+function calendar_get_timestamp($d, $m, $y, $time = 0) {
+    // If a day, month and year were passed then convert it to a timestamp. If these were passed
+    // then we can assume the day, month and year are passed as Gregorian, as no where in core
+    // should we be passing these values rather than the time.
+    if (!empty($d) && !empty($m) && !empty($y)) {
+        if (checkdate($m, $d, $y)) {
+            $time = make_timestamp($y, $m, $d);
+        } else {
+            $time = time();
+        }
+    } else if (empty($time)) {
+        $time = time();
+    }
+
+    return $time;
+}
+
+/**
+ * Get the calendar footer options.
+ *
+ * @param calendar_information $calendar The calendar information object.
+ * @return array The data for template and template name.
+ */
+function calendar_get_footer_options($calendar) {
+    global $CFG, $USER, $DB, $PAGE;
+
+    // Generate hash for iCal link.
+    $rawhash = $USER->id . $DB->get_field('user', 'password', ['id' => $USER->id]) . $CFG->calendar_exportsalt;
+    $authtoken = sha1($rawhash);
+
+    $renderer = $PAGE->get_renderer('core_calendar');
+    $footer = new \core_calendar\external\footer_options_exporter($calendar, $USER->id, $authtoken);
+    $data = $footer->export($renderer);
+    $template = 'core_calendar/footer_options';
+
+    return [$data, $template];
 }
